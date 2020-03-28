@@ -224,7 +224,7 @@ arch/arm/include/cortex_m/cmse.h          @ioannisg
 /kernel/device.c                          @andrewboie @andyross @nashif
 /kernel/idle.c                            @andrewboie @andyross @nashif
 /samples/basic/servo_motor/*microbit*     @jhe
-/lib/updatehub/                           @chtavares592 @otavio
+/lib/updatehub/                           @nandojve @otavio
 /samples/bluetooth/                       @sjanc @jhedberg @Vudentz
 /samples/boards/intel_s1000_crb/          @sathishkuttan @rgundi @nashif
 /samples/display/                         @vanwinkeljan
@@ -237,7 +237,7 @@ arch/arm/include/cortex_m/cmse.h          @ioannisg
 /samples/net/sockets/coap_client/         @rveerama1
 /samples/net/sockets/coap_server/         @rveerama1
 /samples/net/sockets/                     @jukkar @tbursztyka @pfalcon
-/samples/net/updatehub/                   @chtavares592 @otavio
+/samples/net/updatehub/                   @nandojve @otavio
 /samples/sensor/                          @bogdan-davidoaia
 /samples/subsys/logging/                  @nordic-krch @jarz-nordic
 /samples/subsys/shell/                    @jarz-nordic @nordic-krch
