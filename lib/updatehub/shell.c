@@ -18,13 +18,39 @@
 #define UPDATEHUB_SERVER "coap.updatehub.io"
 #endif
 
+extern struct k_mbox uhu_mbox;
+extern const k_tid_t uhu_tmain;
+
 static int cmd_run(const struct shell *shell, size_t argc,
 		   char **argv)
 {
 	int ret = -1;
+	struct k_mbox_msg uhu_s;
+	struct k_mbox_msg uhu_r;
+	u32_t uhu_ret;
 
 	shell_fprintf(shell, SHELL_INFO, "Starting UpdateHub run...\n");
 
+	uhu_s.info = 101;
+	uhu_s.size = 0;
+	uhu_s.tx_data = NULL;
+	uhu_s.tx_block.data = NULL;
+	uhu_s.tx_target_thread = uhu_tmain;
+
+	uhu_r.info = 101;
+	uhu_r.size = 1;
+	uhu_r.rx_source_thread = uhu_tmain;
+
+	k_mbox_put(&uhu_mbox, &uhu_s, K_FOREVER);
+	k_mbox_get(&uhu_mbox, &uhu_r, &uhu_ret, K_FOREVER);
+
+	if (uhu_s.info == uhu_r.info) {
+		ret = 0;
+		shell_fprintf(shell, SHELL_INFO, "Valor: %d\n", uhu_ret);
+	} else {
+		shell_fprintf(shell, SHELL_INFO, "Error: %d\n", ret);
+	}
+/*
 	switch (updatehub_probe()) {
 	case UPDATEHUB_HAS_UPDATE:
 		switch (updatehub_update()) {
@@ -46,7 +72,7 @@ static int cmd_run(const struct shell *shell, size_t argc,
 		shell_fprintf(shell, SHELL_ERROR, "Invalid response\n");
 		break;
 	}
-
+*/
 	return ret;
 }
 

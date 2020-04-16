@@ -53,6 +53,12 @@ LOG_MODULE_REGISTER(updatehub);
 #define UPDATEHUB_SERVER "coap.updatehub.io"
 #endif
 
+static void updatehun_tmain(int unused1, int unused2, int unused3);
+
+K_MBOX_DEFINE(uhu_mbox);
+K_THREAD_DEFINE(uhu_tmain, 2048, updatehun_tmain,
+		NULL, NULL, NULL, -2, 0, K_NO_WAIT);
+
 static struct updatehub_context {
 	struct coap_block_context block;
 	struct k_sem semaphore;
@@ -847,4 +853,37 @@ void updatehub_autohandler(void)
 {
 	k_delayed_work_init(&updatehub_work_handle, autohandler);
 	k_delayed_work_submit(&updatehub_work_handle, K_NO_WAIT);
+}
+
+static void updatehun_tmain(int unused1, int unused2, int unused3)
+{
+	struct k_mbox_msg uhu_r;
+	struct k_mbox_msg uhu_s;
+	u32_t uhu_data;
+
+	ARG_UNUSED(unused1);
+	ARG_UNUSED(unused2);
+	ARG_UNUSED(unused3);
+
+	uhu_r.info = 101;
+	uhu_r.size = 0;
+
+	uhu_s.info = 101;
+	uhu_s.size = 1;
+	uhu_s.tx_data = &uhu_data;
+	uhu_s.tx_block.data = NULL;
+
+	while (1) {
+		uhu_r.rx_source_thread = K_ANY;
+		k_mbox_get(&uhu_mbox, &uhu_r, NULL, K_FOREVER);
+		if (uhu_r.info == 101) {
+			uhu_data = 0;
+		} else {
+			uhu_data = -51;
+		}
+		k_mbox_data_get(&uhu_r, NULL);
+
+		uhu_s.tx_target_thread = uhu_r.rx_source_thread;
+		k_mbox_put(&uhu_mbox, &uhu_s, K_FOREVER);
+	}
 }
