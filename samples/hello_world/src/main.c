@@ -13,7 +13,7 @@ void main(void)
 {
 	int ret = -1;
 
-	printk("Hello World! 2 %s\n", CONFIG_BOARD);
+	printk("Hello World! %s\n", CONFIG_BOARD);
 
 	/* The image of application needed be confirmed */
 	printk("Confirming the boot image\n");
