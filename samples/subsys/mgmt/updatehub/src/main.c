@@ -5,10 +5,15 @@
  */
 
 #include <zephyr.h>
-#include <updatehub.h>
+#include <drivers/uart.h>
+#include <net/net_mgmt.h>
+#include <net/net_event.h>
+#include <net/net_conn_mgr.h>
+#include <net/wifi_mgmt.h>
 #include <dfu/mcuboot.h>
 #include <sys/printk.h>
 #include <logging/log.h>
+#include <updatehub.h>
 
 #if defined(CONFIG_UPDATEHUB_DTLS)
 #include <net/tls_credentials.h>
@@ -17,37 +22,64 @@
 
 LOG_MODULE_REGISTER(main);
 
-#if defined(CONFIG_WIFI)
-#include <net/wifi_mgmt.h>
+#define EVENT_MASK (NET_EVENT_L4_CONNECTED | \
+		    NET_EVENT_L4_DISCONNECTED)
 
-static int connected;
-static struct net_mgmt_event_callback wifi_shell_mgmt_cb;
+static struct net_mgmt_event_callback mgmt_cb;
 
-static void handle_wifi_connect_result(struct net_mgmt_event_callback *cb)
+void start_updatehub(void)
 {
-	const struct wifi_status *status = (const struct wifi_status *)
-					   cb->info;
-
-	if (status->status) {
-		LOG_ERR("Connection request failed (%d)", status->status);
-	} else {
-		LOG_INF("WIFI Connected");
-		connected = 1;
-	}
-}
-
-static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-				    uint32_t mgmt_event, struct net_if *iface)
-{
-	switch (mgmt_event) {
-	case NET_EVENT_WIFI_CONNECT_RESULT:
-		handle_wifi_connect_result(cb);
-		break;
-	default:
-		break;
-	}
-}
+#if defined(CONFIG_UPDATEHUB_POLLING)
+	LOG_INF("Starting UpdateHub polling mode");
+	updatehub_autohandler();
 #endif
+
+#if defined(CONFIG_UPDATEHUB_MANUAL)
+	LOG_INF("Starting UpdateHub manual mode");
+
+	switch (updatehub_probe()) {
+	case UPDATEHUB_HAS_UPDATE:
+		switch (updatehub_update()) {
+		case UPDATEHUB_OK:
+			ret = 0;
+			sys_reboot(SYS_REBOOT_WARM);
+			break;
+
+		default:
+			LOG_ERR("Error installing update.");
+			break;
+		}
+
+	case UPDATEHUB_NO_UPDATE:
+		LOG_INF("No update found");
+		ret = 0;
+		break;
+
+	default:
+		LOG_ERR("Invalid response");
+		break;
+	}
+#endif
+}
+
+static void event_handler(struct net_mgmt_event_callback *cb,
+			  uint32_t mgmt_event, struct net_if *iface)
+{
+	if ((mgmt_event & EVENT_MASK) != mgmt_event) {
+		return;
+	}
+
+	if (mgmt_event == NET_EVENT_L4_CONNECTED) {
+		LOG_INF("Network connected");
+		start_updatehub();
+		return;
+	}
+
+	if (mgmt_event == NET_EVENT_L4_DISCONNECTED) {
+		LOG_INF("Network disconnected");
+		return;
+	}
+}
 
 void main(void)
 {
@@ -81,12 +113,6 @@ void main(void)
 	}
 
 #if defined(CONFIG_WIFI)
-	net_mgmt_init_event_callback(&wifi_shell_mgmt_cb,
-				     wifi_mgmt_event_handler,
-				     NET_EVENT_WIFI_CONNECT_RESULT);
-
-	net_mgmt_add_event_callback(&wifi_shell_mgmt_cb);
-
 	struct net_if *iface = net_if_get_default();
 	static struct wifi_connect_req_params cnx_params = {
 		.ssid = CONFIG_UPDATEHUB_WIFI_SSID,
@@ -100,49 +126,19 @@ void main(void)
 	cnx_params.ssid_length = strlen(CONFIG_UPDATEHUB_WIFI_SSID);
 	cnx_params.psk_length = strlen(CONFIG_UPDATEHUB_WIFI_PSK);
 
-	connected = 0;
-
 	if (net_mgmt(NET_REQUEST_WIFI_CONNECT, iface,
 		     &cnx_params, sizeof(struct wifi_connect_req_params))) {
+		LOG_ERR("Error connecting to WiFi");
 		return;
 	}
+#elif defined(CONFIG_MODEM)
+	const struct device *uart_dev = device_get_binding(CONFIG_MODEM_GSM_UART_NAME);
 
-	while (connected == 0) {
-		k_msleep(100);
-	}
+	LOG_INF("APN '%s' UART '%s' device %p", CONFIG_MODEM_GSM_APN,
+		CONFIG_MODEM_GSM_UART_NAME, uart_dev);
 #endif
 
-#if defined(CONFIG_UPDATEHUB_POLLING)
-	LOG_INF("Starting UpdateHub polling mode");
-	updatehub_autohandler();
-#endif
-
-#if defined(CONFIG_UPDATEHUB_MANUAL)
-	LOG_INF("Starting UpdateHub manual mode");
-
-	enum updatehub_response resp;
-
-	switch (updatehub_probe()) {
-	case UPDATEHUB_HAS_UPDATE:
-		switch (updatehub_update()) {
-		case UPDATEHUB_OK:
-			ret = 0;
-			sys_reboot(SYS_REBOOT_WARM);
-			break;
-
-		default:
-			LOG_ERR("Error installing update.");
-			break;
-		}
-
-	case UPDATEHUB_NO_UPDATE:
-		LOG_INF("No update found");
-		ret = 0;
-		break;
-
-	default:
-		LOG_ERR("Invalid response");
-		break;
-	}
-#endif
+	net_mgmt_init_event_callback(&mgmt_cb, event_handler, EVENT_MASK);
+	net_mgmt_add_event_callback(&mgmt_cb);
+	net_conn_mgr_resend_status();
 }
