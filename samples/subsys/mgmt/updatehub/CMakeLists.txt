@@ -1,5 +1,4 @@
 # Copyright (c) 2018-2020 O.S.Systems
-#
 # SPDX-License-Identifier: Apache-2.0
 
 cmake_minimum_required(VERSION 3.13.1)
